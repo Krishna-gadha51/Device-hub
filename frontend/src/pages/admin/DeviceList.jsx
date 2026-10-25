@@ -68,8 +68,6 @@ const DEVICE_TYPES = [
   "Scanner",
   "External Hard Drive",
   "Server",
-  "AC",
-  "Fan",
 ];
 
 function DeviceList() {
@@ -490,7 +488,7 @@ function DeviceList() {
                 <Box>
                   <Typography className="detail-label">Brand & Model</Typography>
                   <Typography sx={{ fontSize: "14px", fontWeight: 600, color: "#1e293b", mt: 0.3 }}>
-                    {viewingDevice.brand} • {viewingDevice.model}
+                    {viewingDevice.brand} {viewingDevice.model}
                   </Typography>
                 </Box>
 

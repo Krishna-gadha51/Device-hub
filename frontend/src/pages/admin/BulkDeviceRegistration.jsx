@@ -163,14 +163,14 @@ function BulkDeviceRegistration() {
 
     const items = [];
     const count = Math.min(parsedQty, 100);
-    const prefixName = baseName.trim() || "Device";
+    const exactName = baseName.trim() || "Device";
 
     if (serialStrategy === "auto") {
       const startNum = parseInt(startNumber, 10) || 1;
       const prefix = serialPrefix.trim() || "SN";
       for (let i = 0; i < count; i++) {
         items.push({
-          deviceName: `${prefixName} ${String(i + 1).padStart(2, "0")}`,
+          deviceName: exactName, // Uses exact name without numbers
           serialNumber: `${prefix}-${startNum + i}`,
           brand: brand.trim() || "—",
           model: model.trim() || "—",
@@ -181,7 +181,7 @@ function BulkDeviceRegistration() {
       const customList = parseCustomSerials();
       for (let i = 0; i < count; i++) {
         items.push({
-          deviceName: `${prefixName} ${String(i + 1).padStart(2, "0")}`,
+          deviceName: exactName, // Uses exact name without numbers
           serialNumber: customList[i] || `[Pending Serial #${i + 1}]`,
           brand: brand.trim() || "—",
           model: model.trim() || "—",
@@ -281,7 +281,7 @@ function BulkDeviceRegistration() {
         <Toolbar sx={{ justifyContent: "space-between", padding: "12px 28px !important", minHeight: "64px" }}>
           <Box>
             <Typography sx={{ fontSize: "11px", color: "#64748b", fontWeight: 600, letterSpacing: "0.5px" }}>
-              FISAT CAMPUS ASSET PORTAL
+              COLLEGE ASSET PORTAL
             </Typography>
             <Typography sx={{ fontSize: "18px", fontWeight: 700, color: "#1e293b" }}>
               Electronic Device Management System
@@ -411,8 +411,7 @@ function BulkDeviceRegistration() {
                   size="small"
                   value={baseName}
                   onChange={(e) => setBaseName(e.target.value)}
-                  placeholder="e.g. Lab PC"
-                  helperText="Example: Lab PC - 01, Lab PC - 02"
+                  placeholder="e.g. Dell OptiPlex"
                   required
                   sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px" } }}
                 />
@@ -742,7 +741,7 @@ function BulkDeviceRegistration() {
                   {previewItems.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} align="center" sx={{ py: 3, color: "#94a3b8" }}>
-                        Enter a Device Name Prefix, Quantity, and Serial settings above to preview items.
+                        Enter a Device Name, Quantity, and Serial settings above to preview items.
                       </TableCell>
                     </TableRow>
                   ) : (

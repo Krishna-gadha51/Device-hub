@@ -50,9 +50,12 @@ const DEVICE_TYPES = [
   "Router",
   "UPS",
   "CCTV Camera",
-  "Server",
-  "AC",
+  "Keyboard",
+  "Mouse",
   "Smart Board",
+  "Scanner",
+  "External Hard Drive",
+  "Server",
 ];
 
 const INSTITUTIONAL_DEPARTMENTS = [

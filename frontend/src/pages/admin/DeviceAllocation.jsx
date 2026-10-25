@@ -67,9 +67,12 @@ const DEVICE_TYPES = [
   "Router",
   "UPS",
   "CCTV Camera",
-  "Server",
-  "AC",
+  "Keyboard",
+  "Mouse",
   "Smart Board",
+  "Scanner",
+  "External Hard Drive",
+  "Server",
 ];
 
 function DeviceAllocation() {
@@ -189,7 +192,8 @@ function DeviceAllocation() {
       );
     });
 
-    return matched.length > 0 ? matched : staffList;
+    // Return only strict department matches (do not fallback to full staff list)
+    return matched;
   }, [staffList, department]);
 
   // Pre-select matching quantity of available units
@@ -487,7 +491,9 @@ function DeviceAllocation() {
                   displayEmpty
                   sx={{ borderRadius: "8px", fontSize: "13px" }}
                 >
-                  <MenuItem value="" disabled>Select Staff Member</MenuItem>
+                  <MenuItem value="" disabled>
+                    {filteredStaffList.length === 0 ? "No staff found in this department" : "Select Staff Member"}
+                  </MenuItem>
                   {allocatedTo && !filteredStaffList.some((s) => s.name === allocatedTo) && (
                     <MenuItem value={allocatedTo}>
                       {allocatedTo} (Requisition In-charge)
