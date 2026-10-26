@@ -32,7 +32,6 @@ import {
 } from "@mui/material";
 
 import DeleteOutlineOutlinedIcon from "@mui/icons-material/DeleteOutlineOutlined";
-import AddCircleOutlineOutlinedIcon from "@mui/icons-material/AddCircleOutlineOutlined";
 import FilterListOutlinedIcon from "@mui/icons-material/FilterListOutlined";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
@@ -45,13 +44,8 @@ const DISPOSAL_STATUSES = [
   "Sent for Recycling",
   "Pending Disposal",
   "Disposed / Scrapped",
-];
-
-const RECYCLING_VENDORS = [
-  "GreenIndia Certified E-Waste Recyclers",
-  "EcoTech Recyclers Pvt Ltd",
-  "Campus Scrap Clearing Agency",
-  "Government Authorized Recycler",
+  "Sent to Recycler",
+  "Dismantled for Parts",
 ];
 
 function EWasteManagement() {
@@ -59,25 +53,13 @@ function EWasteManagement() {
   const username = localStorage.getItem("username") || "Admin";
 
   const [records, setRecords] = useState([]);
-  const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("All Disposal Statuses");
-
-  // Decommission Modal State
-  const [openDecomModal, setOpenDecomModal] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [decomForm, setDecomForm] = useState({
-    assetId: "",
-    decommissionReason: "",
-    condition: "Beyond Repair",
-    disposalStatus: "Sent for Recycling",
-    recyclingVendor: "GreenIndia Certified E-Waste Recyclers",
-    remarks: "",
-  });
 
   // Update Status Modal State
   const [openUpdateModal, setOpenUpdateModal] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
   const [updateStatus, setUpdateStatus] = useState("Sent for Recycling");
   const [updateVendor, setUpdateVendor] = useState("");
   const [certificateNumber, setCertificateNumber] = useState("");
@@ -90,47 +72,10 @@ function EWasteManagement() {
         const ewasteRes = await API.get("/ewaste");
         ewasteData = ewasteRes.data || [];
       } catch (err) {
-        console.warn("Dedicated e-waste endpoint lookup skipped, using device inventory fallback.");
-      }
-
-      const devicesRes = await API.get("/devices");
-      const rawDevices = devicesRes.data;
-      const allDevs = Array.isArray(rawDevices)
-        ? rawDevices
-        : Array.isArray(rawDevices?.devices)
-        ? rawDevices.devices
-        : [];
-
-      // Filter for devices marked as E-Waste or Unrepairable from Maintenance
-      const decommissionedDevices = allDevs.filter(
-        (d) =>
-          (d.status || "").toLowerCase() === "e-waste" ||
-          (d.status || "").toLowerCase() === "unrepairable"
-      );
-
-      // If e-waste table is empty or missing entries, map them dynamically from device inventory
-      if (ewasteData.length === 0 && decommissionedDevices.length > 0) {
-        ewasteData = decommissionedDevices.map((d, index) => ({
-          ewasteId: d.ewasteId || `EW-${String(index + 1).padStart(3, "0")}`,
-          assetId: d.assetId,
-          deviceName: d.deviceName || "Hardware Asset",
-          model: d.model || d.brand || "Standard",
-          serialNumber: d.serialNumber || "N/A",
-          decommissionReason: d.remarks || d.location || "Decommissioned via Maintenance",
-          condition: "Beyond Repair",
-          disposalStatus: "Pending Disposal",
-          recyclingVendor: "GreenIndia Certified E-Waste Recyclers",
-          decommissionDate: d.allocatedDate || new Date().toISOString().split("T")[0],
-        }));
+        console.warn("Dedicated e-waste endpoint lookup skipped.");
       }
 
       setRecords(ewasteData);
-
-      const eligible = allDevs.filter((d) => (d.status || "").toLowerCase() !== "e-waste");
-      setDevices(eligible);
-      if (eligible.length > 0) {
-        setDecomForm((prev) => ({ ...prev, assetId: eligible[0].assetId }));
-      }
     } catch (error) {
       console.error("Failed to load e-waste data:", error);
     } finally {
@@ -155,7 +100,7 @@ function EWasteManagement() {
   const handleOpenUpdate = (record) => {
     setSelectedRecord(record);
     setUpdateStatus(record.disposalStatus || "Sent for Recycling");
-    setUpdateVendor(record.recyclingVendor || "GreenIndia Certified E-Waste Recyclers");
+    setUpdateVendor(record.disposalVendor || record.recyclingVendor || "GreenIndia Certified E-Waste Recyclers");
     setCertificateNumber(record.certificateNumber || "");
     setOpenUpdateModal(true);
   };
@@ -164,9 +109,10 @@ function EWasteManagement() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await API.put(`/ewaste/${selectedRecord.ewasteId}`, {
+      const targetId = selectedRecord.scrapId || selectedRecord.ewasteId;
+      await API.put(`/ewaste/${targetId}`, {
         disposalStatus: updateStatus,
-        recyclingVendor: updateVendor,
+        disposalVendor: updateVendor,
         certificateNumber,
       });
 
@@ -174,33 +120,6 @@ function EWasteManagement() {
       fetchData();
     } catch (error) {
       alert(error.response?.data?.message || "Failed to update record.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDecommissionSubmit = async (e) => {
-    e.preventDefault();
-    if (!decomForm.assetId || !decomForm.decommissionReason.trim()) {
-      alert("Please select an asset and supply a decommissioning reason.");
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await API.post("/ewaste", decomForm);
-      setOpenDecomModal(false);
-      setDecomForm({
-        assetId: "",
-        decommissionReason: "",
-        condition: "Beyond Repair",
-        disposalStatus: "Sent for Recycling",
-        recyclingVendor: "GreenIndia Certified E-Waste Recyclers",
-        remarks: "",
-      });
-      fetchData();
-    } catch (error) {
-      alert(error.response?.data?.message || "Failed to decommission asset.");
     } finally {
       setSubmitting(false);
     }
@@ -227,7 +146,7 @@ function EWasteManagement() {
         <Toolbar sx={{ justifyContent: "space-between", padding: "12px 28px !important", minHeight: "64px" }}>
           <Box>
             <Typography sx={{ fontSize: "11px", color: "#64748b", fontWeight: 600, letterSpacing: "0.5px" }}>
-              College Asset Portal
+              FISAT Asset Portal
             </Typography>
             <Typography sx={{ fontSize: "18px", fontWeight: 700, color: "#1e293b" }}>
               Electronic Device Management System
@@ -237,7 +156,7 @@ function EWasteManagement() {
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ textAlign: "right" }}>
               <Typography sx={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>
-                College System Administrator
+                FISAT System Administrator
               </Typography>
               <Typography sx={{ fontSize: "11px", color: "#64748b" }}>
                 {username.toLowerCase()}@devicehub.edu • Admin
@@ -305,24 +224,6 @@ function EWasteManagement() {
                 </Select>
               </FormControl>
             </Box>
-
-            <Button
-              variant="contained"
-              startIcon={<AddCircleOutlineOutlinedIcon />}
-              onClick={() => setOpenDecomModal(true)}
-              sx={{
-                backgroundColor: "#dc2626",
-                textTransform: "none",
-                fontWeight: 600,
-                fontSize: "13px",
-                borderRadius: "8px",
-                boxShadow: "none",
-                px: 2.2,
-                "&:hover": { backgroundColor: "#b91c1c" },
-              }}
-            >
-              Decommission Asset
-            </Button>
           </Box>
         </Paper>
 
@@ -364,10 +265,10 @@ function EWasteManagement() {
                   </TableRow>
                 ) : (
                   filteredRecords.map((row) => (
-                    <TableRow key={row.ewasteId || row._id} hover sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
+                    <TableRow key={row.scrapId || row.ewasteId || row._id} hover sx={{ "&:last-child td, &:last-child th": { border: 0 } }}>
                       {/* E-WASTE ID */}
                       <TableCell sx={{ fontWeight: 700, color: "#dc2626", fontSize: "13px" }}>
-                        {row.ewasteId}
+                        {row.scrapId}
                       </TableCell>
 
                       {/* ASSET ID */}
@@ -381,7 +282,7 @@ function EWasteManagement() {
                           {row.deviceName}
                         </Typography>
                         <Typography sx={{ fontSize: "11.5px", color: "#64748b" }}>
-                          {row.model}
+                          {row.deviceType || "Standard"}
                         </Typography>
                       </TableCell>
 
@@ -392,13 +293,13 @@ function EWasteManagement() {
 
                       {/* REASON */}
                       <TableCell sx={{ fontSize: "12.5px", color: "#475569", maxWidth: 200 }}>
-                        {row.decommissionReason}
+                        {row.reasonForScrap}
                       </TableCell>
 
                       {/* CONDITION */}
                       <TableCell>
                         <Chip
-                          label={row.condition || "Beyond Repair"}
+                          label="Beyond Repair"
                           size="small"
                           sx={{
                             backgroundColor: "#fee2e2",
@@ -413,7 +314,7 @@ function EWasteManagement() {
                       {/* DISPOSAL STATUS */}
                       <TableCell>
                         <Chip
-                          label={row.disposalStatus || "Sent for Recycling"}
+                          label={row.disposalStatus || "Pending Disposal"}
                           size="small"
                           sx={{
                             backgroundColor: "#dbeafe",
@@ -427,12 +328,12 @@ function EWasteManagement() {
 
                       {/* VENDOR */}
                       <TableCell sx={{ fontSize: "12.5px", color: "#1e293b", fontWeight: 500 }}>
-                        {row.recyclingVendor}
+                        {row.disposalVendor}
                       </TableCell>
 
                       {/* DATE */}
                       <TableCell sx={{ fontSize: "12px", color: "#64748b" }}>
-                        {row.decommissionDate}
+                        {row.disposalDate ? row.disposalDate.split("T")[0] : "—"}
                       </TableCell>
 
                       {/* ACTION */}
@@ -468,7 +369,7 @@ function EWasteManagement() {
         <Dialog open={openUpdateModal} onClose={() => setOpenUpdateModal(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: "16px", p: 1 } }}>
           <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Typography sx={{ fontSize: "16px", fontWeight: 700 }}>
-              Update Record: {selectedRecord?.ewasteId}
+              Update Record: {selectedRecord?.scrapId}
             </Typography>
             <IconButton onClick={() => setOpenUpdateModal(false)}><CloseOutlinedIcon /></IconButton>
           </DialogTitle>
@@ -488,6 +389,8 @@ function EWasteManagement() {
                   <MenuItem value="Pending Disposal">Pending Disposal</MenuItem>
                   <MenuItem value="Sent for Recycling">Sent for Recycling</MenuItem>
                   <MenuItem value="Disposed / Scrapped">Disposed / Scrapped</MenuItem>
+                  <MenuItem value="Sent to Recycler">Sent to Recycler</MenuItem>
+                  <MenuItem value="Dismantled for Parts">Dismantled for Parts</MenuItem>
                 </Select>
               </FormControl>
 
@@ -495,7 +398,7 @@ function EWasteManagement() {
                 fullWidth
                 size="small"
                 label="Recycling Vendor / Contractor"
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
                 value={updateVendor}
                 onChange={(e) => setUpdateVendor(e.target.value)}
                 sx={{ "& .MuiOutlinedInput-root": { borderRadius: "8px" } }}
@@ -505,7 +408,7 @@ function EWasteManagement() {
                 fullWidth
                 size="small"
                 label="Destruction Certificate / Manifest No."
-                InputLabelProps={{ shrink: true }}
+                slotProps={{ inputLabel: { shrink: true } }}
                 placeholder="e.g. CERT-EW-2026-09"
                 value={certificateNumber}
                 onChange={(e) => setCertificateNumber(e.target.value)}
@@ -529,109 +432,6 @@ function EWasteManagement() {
                 }}
               >
                 {submitting ? "Saving..." : "Save Record"}
-              </Button>
-            </DialogActions>
-          </Box>
-        </Dialog>
-
-        {/* DECOMMISSION ASSET MODAL */}
-        <Dialog open={openDecomModal} onClose={() => setOpenDecomModal(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: "16px", p: 1 } }}>
-          <DialogTitle sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <Typography sx={{ fontSize: "16px", fontWeight: 700, color: "#dc2626" }}>
-              Decommission Equipment to E-Waste
-            </Typography>
-            <IconButton onClick={() => setOpenDecomModal(false)}><CloseOutlinedIcon /></IconButton>
-          </DialogTitle>
-          <Divider />
-
-          <Box component="form" onSubmit={handleDecommissionSubmit}>
-            <DialogContent sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 3 }}>
-              <FormControl fullWidth size="small">
-                <InputLabel shrink>Select Asset to Condemn *</InputLabel>
-                <Select
-                  notched
-                  label="Select Asset to Condemn *"
-                  value={decomForm.assetId}
-                  onChange={(e) => setDecomForm({ ...decomForm, assetId: e.target.value })}
-                >
-                  {devices.map((d) => (
-                    <MenuItem key={d.assetId} value={d.assetId}>
-                      {d.assetId} — {d.deviceName} ({d.model}) | Loc: {d.location}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <TextField
-                fullWidth
-                multiline
-                rows={3}
-                size="small"
-                label="Decommission Reason / Technical Justification *"
-                InputLabelProps={{ shrink: true }}
-                placeholder="e.g. Severe motherboard short circuit; repair cost exceeds market value."
-                value={decomForm.decommissionReason}
-                onChange={(e) => setDecomForm({ ...decomForm, decommissionReason: e.target.value })}
-                required
-              />
-
-              <Box sx={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 2 }}>
-                <FormControl fullWidth size="small">
-                  <InputLabel shrink>Disposal Status</InputLabel>
-                  <Select
-                    notched
-                    label="Disposal Status"
-                    value={decomForm.disposalStatus}
-                    onChange={(e) => setDecomForm({ ...decomForm, disposalStatus: e.target.value })}
-                  >
-                    <MenuItem value="Sent for Recycling">Sent for Recycling</MenuItem>
-                    <MenuItem value="Pending Disposal">Pending Disposal</MenuItem>
-                    <MenuItem value="Disposed / Scrapped">Disposed / Scrapped</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <FormControl fullWidth size="small">
-                  <InputLabel shrink>Recycling Vendor</InputLabel>
-                  <Select
-                    notched
-                    label="Recycling Vendor"
-                    value={decomForm.recyclingVendor}
-                    onChange={(e) => setDecomForm({ ...decomForm, recyclingVendor: e.target.value })}
-                  >
-                    {RECYCLING_VENDORS.map((v) => (
-                      <MenuItem key={v} value={v}>{v}</MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-
-              <TextField
-                fullWidth
-                size="small"
-                label="Remarks"
-                InputLabelProps={{ shrink: true }}
-                value={decomForm.remarks}
-                onChange={(e) => setDecomForm({ ...decomForm, remarks: e.target.value })}
-                placeholder="e.g. Approved by MCA HOD for condemnation."
-              />
-            </DialogContent>
-
-            <DialogActions sx={{ p: 2.5 }}>
-              <Button onClick={() => setOpenDecomModal(false)} variant="outlined" sx={{ textTransform: "none" }}>
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={submitting}
-                sx={{
-                  backgroundColor: "#dc2626",
-                  textTransform: "none",
-                  fontWeight: 600,
-                  "&:hover": { backgroundColor: "#b91c1c" },
-                }}
-              >
-                {submitting ? "Decommissioning..." : "Confirm Decommission"}
               </Button>
             </DialogActions>
           </Box>

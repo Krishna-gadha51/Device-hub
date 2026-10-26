@@ -27,6 +27,7 @@ import {
   MenuItem,
   Select,
   FormControl,
+  InputAdornment,
 } from "@mui/material";
 
 import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
@@ -34,6 +35,7 @@ import PersonAddAlt1OutlinedIcon from "@mui/icons-material/PersonAddAlt1Outlined
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import PowerSettingsNewOutlinedIcon from "@mui/icons-material/PowerSettingsNewOutlined";
 import CloseIcon from "@mui/icons-material/Close";
+import SearchOutlinedIcon from "@mui/icons-material/SearchOutlined";
 
 import Sidebar, { drawerWidth } from "../../components/Sidebar";
 import API from "../../api/axios";
@@ -67,10 +69,12 @@ const INSTITUTIONAL_DESIGNATIONS = [
   "Associate Professor",
   "Assistant Professor",
   "Senior Lecturer",
+  "Head",
   "Lecturer",
   "Laboratory In-Charge",
   "Senior Lab Assistant",
   "Lab Assistant / Technician",
+  " Lab Instructor",
   "System Administrator",
   "Network Administrator",
   "Librarian / Assistant Librarian",
@@ -93,8 +97,8 @@ function StaffManagement() {
   const [errorMessage, setErrorMessage] = useState("");
   const [pageError, setPageError] = useState("");
   const [editingStaffId, setEditingStaffId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState(""); // Search state
 
-  // Removed redundant username field
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -108,7 +112,16 @@ function StaffManagement() {
     setPageError("");
     try {
       const response = await API.get("/staff-management");
-      setStaffList(response.data || []);
+      const rawData = response.data || [];
+
+      // Sort staff strictly alphabetical by name (A-Z)
+      const sortedData = rawData.sort((a, b) => {
+        const nameA = (a.name || "").toLowerCase();
+        const nameB = (b.name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+
+      setStaffList(sortedData);
     } catch (err) {
       console.error("Error loading staff directory:", err);
       const msg =
@@ -182,7 +195,6 @@ function StaffManagement() {
 
     setSubmitting(true);
     try {
-      // Auto-assign username from email or name to prevent backend validation issues
       const generatedUsername = formData.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "");
       const payload = {
         ...formData,
@@ -225,6 +237,11 @@ function StaffManagement() {
     navigate("/login");
   };
 
+  // Filtered staff list based on search query by name
+  const filteredStaffList = staffList.filter((staff) =>
+    (staff.name || "").toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", width: "100vw", backgroundColor: "#f8fafc", overflowX: "hidden" }}>
       <Sidebar activeTab="admin-staff" username={username} onLogout={handleLogout} />
@@ -245,7 +262,7 @@ function StaffManagement() {
         <Toolbar sx={{ justifyContent: "space-between", padding: "12px 28px !important", minHeight: "64px" }}>
           <Box>
             <Typography sx={{ fontSize: "11px", color: "#64748b", fontWeight: 600, letterSpacing: "0.5px" }}>
-              College Asset Portal
+              FISAT Asset Portal
             </Typography>
             <Typography sx={{ fontSize: "18px", fontWeight: 700, color: "#1e293b" }}>
               Electronic Device Management System
@@ -255,7 +272,7 @@ function StaffManagement() {
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <Box sx={{ textAlign: "right" }}>
               <Typography sx={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>
-                College System Administrator
+                FISAT System Administrator
               </Typography>
               <Typography sx={{ fontSize: "11px", color: "#64748b" }}>
                 admin@devicehub.edu • <span style={{ color: "#1769ff", fontWeight: 700 }}>Admin</span>
@@ -328,10 +345,26 @@ function StaffManagement() {
             overflow: "hidden",
           }}
         >
-          <Box sx={{ p: "16px 20px", borderBottom: "1px solid #f1f5f9" }}>
+          {/* Header & Search Bar Bar */}
+          <Box sx={{ p: "16px 20px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
             <Typography sx={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
-              Staff Accounts Directory ({staffList.length})
+              Staff Accounts Directory ({filteredStaffList.length})
             </Typography>
+
+            <TextField
+              size="small"
+              placeholder="Search staff by name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              sx={{ width: { xs: "100%", sm: "260px" }, "& .MuiOutlinedInput-root": { borderRadius: "8px", fontSize: "13px" } }}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchOutlinedIcon sx={{ fontSize: 18, color: "#64748b" }} />
+                  </InputAdornment>
+                ),
+              }}
+            />
           </Box>
 
           <TableContainer>
@@ -355,14 +388,14 @@ function StaffManagement() {
                       <CircularProgress size={28} />
                     </TableCell>
                   </TableRow>
-                ) : staffList.length === 0 ? (
+                ) : filteredStaffList.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} align="center" sx={{ py: 6, color: "#64748b" }}>
-                      {'No staff accounts found. Click "+ Add Staff Member" to add one.'}
+                      {searchQuery ? "No staff members found matching your search." : 'No staff accounts found. Click "+ Add Staff Member" to add one.'}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  staffList.map((row) => (
+                  filteredStaffList.map((row) => (
                     <TableRow key={row._id} hover>
                       <TableCell sx={{ py: 1.8 }}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>

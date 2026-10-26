@@ -264,7 +264,7 @@ function DeviceRequests() {
         <Toolbar sx={{ justifyContent: "space-between", padding: "12px 28px !important", minHeight: "64px" }}>
           <Box>
             <Typography sx={{ fontSize: "11px", color: "#64748b", fontWeight: 600, letterSpacing: "0.5px" }}>
-              College Asset Portal
+              FISAT Asset Portal
             </Typography>
             <Typography sx={{ fontSize: "18px", fontWeight: 700, color: "#1e293b" }}>
                Electronic Device Management System
@@ -274,7 +274,7 @@ function DeviceRequests() {
           <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
             <Box sx={{ textAlign: "right" }}>
               <Typography sx={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>
-                College System Administrator
+                FISAT System Administrator
               </Typography>
               <Typography sx={{ fontSize: "11px", color: "#64748b" }}>
                 {username.toLowerCase()}@devicehub.edu • Admin

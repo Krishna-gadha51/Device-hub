@@ -21,11 +21,30 @@ const formatActivityDate = () => {
   });
 };
 
-// @desc    Get all requisitions
+// @desc    Get requisitions (Admin sees all, Staff sees only their own)
 // @route   GET /api/device-requests
 exports.getRequests = async (req, res) => {
   try {
-    const requests = await DeviceRequest.find().sort({ createdAt: -1 });
+    let query = {};
+
+    // Robust case-insensitive check for Admin role
+    const userRole = (req.user?.role || "").trim().toLowerCase();
+    const isAdmin = userRole === "admin" || userRole === "administrator" || req.user?.isAdmin === true;
+
+    // If the logged-in user is a staff member (not an admin), restrict requests to their name/email
+    if (!isAdmin && req.user) {
+      const staffName = req.user.name || req.user.username;
+      const staffEmail = req.user.email;
+      
+      query = {
+        $or: [
+          { requestedBy: { $regex: new RegExp(`^${staffName}$`, "i") } },
+          { email: staffEmail }
+        ]
+      };
+    }
+
+    const requests = await DeviceRequest.find(query).sort({ createdAt: -1 });
     res.json(requests);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -47,10 +66,13 @@ exports.createRequest = async (req, res) => {
     } = req.body;
 
     const requestId = await getNextRequestId();
+    const creatorName = requestedBy || req.user?.name || req.user?.username || "Staff Member";
+    const creatorEmail = req.user?.email || "";
 
     const newRequest = new DeviceRequest({
       requestId,
-      requestedBy,
+      requestedBy: creatorName,
+      email: creatorEmail,
       department,
       deviceType,
       quantity: Number(quantity) || 1,
@@ -67,7 +89,7 @@ exports.createRequest = async (req, res) => {
       action: "Device Requisition Raised",
       note: `${requestId}: ${quantity}x ${deviceType} for ${requiredLocation}`,
       date: formatActivityDate(),
-      admin: requestedBy || "Staff Member",
+      admin: creatorName,
     });
 
     res.status(201).json({ message: `Request ${requestId} created successfully.`, request: saved });

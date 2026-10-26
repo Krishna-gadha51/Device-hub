@@ -257,7 +257,7 @@ function Maintenance() {
                 letterSpacing: "0.5px",
               }}
             >
-              COLLEGE ASSET PORTAL
+              FISAT ASSET PORTAL
             </Typography>
 
             <Typography
@@ -267,7 +267,7 @@ function Maintenance() {
                 color: "#1e293b",
               }}
             >
-              MCA Electronic Device Management System
+               Electronic Device Management System
             </Typography>
           </Box>
 
@@ -284,7 +284,7 @@ function Maintenance() {
                   color: "#1e293b",
                 }}
               >
-                College System Administrator
+                FISAT System Administrator
               </Typography>
 
               <Typography

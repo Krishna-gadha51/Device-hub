@@ -14,16 +14,17 @@ const getNextScrapId = async () => {
 };
 
 // @desc    Decommission unrepairable device & assign to E-Waste
-// @route   POST /api/ewaste/assign-unrepairable
+// @route   POST /api/ewaste
 exports.assignToEWaste = async (req, res) => {
   try {
-    const { assetId, reasonForScrap, ticketId, disposalStatus, disposalVendor } = req.body;
+    const { assetId, reasonForScrap, decommissionReason, ticketId, disposalStatus, disposalVendor, recyclingVendor, remarks } = req.body;
 
-    if (!assetId || !assetId.trim()) {
+    const targetAssetId = assetId;
+    if (!targetAssetId || !targetAssetId.trim()) {
       return res.status(400).json({ message: "Asset ID is required." });
     }
 
-    const cleanAssetId = assetId.trim();
+    const cleanAssetId = targetAssetId.trim();
 
     // 1. Locate device
     const device = await Device.findOne({ assetId: cleanAssetId });
@@ -39,28 +40,36 @@ exports.assignToEWaste = async (req, res) => {
     }
 
     const scrapId = await getNextScrapId();
-    const adminName =
-      req.user?.name || req.user?.username || "College System Administrator";
+    const adminName = req.user?.name || req.user?.username || "College System Administrator";
+    
     const scrapReason =
-      (reasonForScrap && reasonForScrap.trim()) || "Beyond Economical Repair (BER)";
+      (reasonForScrap && reasonForScrap.trim()) || 
+      (decommissionReason && decommissionReason.trim()) || 
+      (remarks && remarks.trim()) || 
+      "Beyond Economical Repair (BER)";
 
     const prevLocation = device.location || "—";
-    const prevCustodian =
-      device.allocatedTo || device.incharge || device.responsibleStaff || "—";
+    const prevCustodian = device.allocatedTo || device.incharge || device.responsibleStaff || "—";
+
+    const resolvedVendor = disposalVendor || recyclingVendor || "GreenIndia Certified E-Waste Recyclers";
+    const resolvedStatus = disposalStatus || "Pending Disposal";
 
     // 3. Create EWaste record
     const eWasteItem = await EWaste.create({
       scrapId,
+      ewasteId: scrapId,
       assetId: device.assetId,
       deviceName: device.deviceName,
       deviceType: device.deviceType || "Other",
       serialNumber: device.serialNumber || "—",
+      model: device.model || device.deviceModel || "Standard",
       previousLocation: prevLocation,
       previousCustodian: prevCustodian,
       reasonForScrap: scrapReason,
       scrappedBy: adminName,
-      disposalStatus: disposalStatus || "Pending Disposal",
-      disposalVendor: disposalVendor || "Authorized Recycler",
+      disposalStatus: resolvedStatus,
+      disposalVendor: resolvedVendor,
+      recyclingVendor: resolvedVendor,
       disposalDate: new Date(),
     });
 
@@ -99,9 +108,8 @@ exports.assignToEWaste = async (req, res) => {
         }
       );
     } else {
-      // Auto-close any pending/under-maintenance ticket for this device
       await Maintenance.updateMany(
-        { assetId: cleanAssetId, status: { $in: ["Pending", "Under Maintenance"] } },
+        { assetId: cleanAssetId, status: { $in: ["Pending", "Under Maintenance", "Reported"] } },
         {
           status: "Unrepairable / Scrapped",
           remarks: `Asset scrapped under ${scrapId}. Reason: ${scrapReason}`,
@@ -144,11 +152,12 @@ exports.getEWasteList = async (req, res) => {
     if (search) {
       query = {
         $or: [
-          { scrapId: { $regex: search,$options: "i" } },
-          { assetId: { $regex: search,$options: "i" } },
-          { deviceName: { $regex: search,$options: "i" } },
-          { previousCustodian: { $regex: search,$options: "i" } },
-          { previousLocation: { $regex: search,$options: "i" } },
+          { scrapId: { $regex: search, $options: "i" } },
+          { ewasteId: { $regex: search, $options: "i" } },
+          { assetId: { $regex: search, $options: "i" } },
+          { deviceName: { $regex: search, $options: "i" } },
+          { previousCustodian: { $regex: search, $options: "i" } },
+          { previousLocation: { $regex: search, $options: "i" } },
         ],
       };
     }
@@ -161,36 +170,34 @@ exports.getEWasteList = async (req, res) => {
   }
 };
 
-// @desc    Update disposal status (e.g. "Sent to Recycler", "Dismantled for Parts")
-// @route   PATCH /api/ewaste/:scrapId/status
+// @desc    Update disposal status, vendor, and certificate details
+// @route   PUT /api/ewaste/:id
 exports.updateDisposalStatus = async (req, res) => {
   try {
-    const { scrapId } = req.params;
-    const { disposalStatus, disposalVendor } = req.body;
-
-    const validStatuses = ["Pending Disposal", "Sent to Recycler", "Dismantled for Parts"];
-    if (disposalStatus && !validStatuses.includes(disposalStatus)) {
-      return res.status(400).json({
-        message: `Invalid status. Allowed values: ${validStatuses.join(", ")}`,
-      });
-    }
+    const recordId = req.params.scrapId || req.params.id;
+    const { disposalStatus, disposalVendor, recyclingVendor, certificateNumber } = req.body;
 
     const updateFields = {};
     if (disposalStatus) updateFields.disposalStatus = disposalStatus;
-    if (disposalVendor) updateFields.disposalVendor = disposalVendor;
+    if (disposalVendor || recyclingVendor) {
+      updateFields.disposalVendor = disposalVendor || recyclingVendor;
+      updateFields.recyclingVendor = disposalVendor || recyclingVendor;
+    }
+    if (certificateNumber !== undefined) updateFields.certificateNumber = certificateNumber;
 
+    // Search by both scrapId or ewasteId to prevent 404 lookups
     const updatedItem = await EWaste.findOneAndUpdate(
-      { scrapId },
+      { $or: [{ scrapId: recordId }, { ewasteId: recordId }] },
       { $set: updateFields },
       { new: true }
     );
 
     if (!updatedItem) {
-      return res.status(404).json({ message: "E-Waste item not found." });
+      return res.status(404).json({ message: `E-Waste record '${recordId}' not found.` });
     }
 
     res.json({
-      message: `Scrap record ${scrapId} updated successfully.`,
+      message: `Scrap record ${recordId} updated successfully.`,
       eWasteItem: updatedItem,
     });
   } catch (error) {

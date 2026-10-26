@@ -379,16 +379,26 @@ exports.updateMaintenanceTicket = async (req, res) => {
       try {
         const existingEWaste = await EWaste.findOne({ assetId: device.assetId });
         if (!existingEWaste) {
+          // Generate sequential scrapId to satisfy required schema validation
+          const lastScrap = await EWaste.findOne().sort({ createdAt: -1 });
+          const numPart = lastScrap && lastScrap.scrapId ? parseInt(lastScrap.scrapId.replace("SCRAP-", ""), 10) : NaN;
+          const nextNum = isNaN(numPart) ? 1 : numPart + 1;
+          const scrapId = `SCRAP-${String(nextNum).padStart(3, "0")}`;
+
           await EWaste.create({
+            scrapId,
+            ewasteId: scrapId,
             assetId: device.assetId,
             deviceName: device.deviceName || "Hardware Asset",
-            model: device.model || device.deviceModel || "Standard Model",
-            serialNumber: device.serialNumber || "N/A",
-            decommissionReason: resolutionNotes || ticket.resolutionNotes || "Declared unrepairable via maintenance ticket",
-            condition: "Beyond Repair",
+            deviceType: device.deviceType || "Other",
+            serialNumber: device.serialNumber || "—",
+            previousLocation: device.location || "—",
+            previousCustodian: device.allocatedTo || "—",
+            reasonForScrap: resolutionNotes || ticket.resolutionNotes || "Declared unrepairable via maintenance ticket",
+            scrappedBy: req.user?.username || "College System Administrator",
             disposalStatus: "Pending Disposal",
-            recyclingVendor: "GreenIndia Certified E-Waste Recyclers",
-            decommissionDate: new Date().toISOString().split("T")[0],
+            disposalVendor: "GreenIndia Certified E-Waste Recyclers",
+            disposalDate: new Date(),
           });
         }
       } catch (ewasteErr) {
@@ -408,9 +418,7 @@ exports.updateMaintenanceTicket = async (req, res) => {
 
     await Activity.create({
       action: "Maintenance Ticket Updated",
-      note:
-        `${ticket.assetId} - ${ticket.ticketId} ` +
-        `status changed to ${ticket.status}`,
+      note: `${ticket.assetId} - ${ticket.ticketId} status changed to ${ticket.status}`,
       date: formatActivityDate(),
       admin:
         req.user?.username ||

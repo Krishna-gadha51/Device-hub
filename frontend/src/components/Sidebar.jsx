@@ -258,7 +258,7 @@ function Sidebar({ username, onLogout }) {
               mt: 0.2,
             }}
           >
-            {isStaff ? "FACULTY PORTAL" : "CAMPUS ASSET HUB"}
+            {isStaff ? "FACULTY PORTAL" : "FISAT ASSET HUB"}
           </Typography>
         </Box>
       </Box>

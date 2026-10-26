@@ -85,7 +85,6 @@ function DeviceAllocation() {
   const isFromRequisition = Boolean(reqData.fromRequisition);
   const requestedQty = Number(reqData.quantity) || 1;
 
-  // Form State pre-populated from requisition
   const [department, setDepartment] = useState(
     reqData.department || "Computer Applications (MCA)"
   );
@@ -109,7 +108,6 @@ function DeviceAllocation() {
 
   const [selectedAssetIds, setSelectedAssetIds] = useState([]);
 
-  // Sync state if navigation state changes
   useEffect(() => {
     if (reqData.fromRequisition) {
       if (reqData.department) setDepartment(reqData.department);
@@ -122,7 +120,6 @@ function DeviceAllocation() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch Available Devices
       try {
         const devicesRes = await API.get("/devices");
         const rawData = devicesRes.data;
@@ -132,14 +129,16 @@ function DeviceAllocation() {
           ? rawData.devices
           : [];
 
-        const unallocated = allDevs.filter((d) => d.status === "Available");
+        // Strict filter: Only pull devices that are explicitly "Available" and NOT already "Allocated"
+        const unallocated = allDevs.filter(
+          (d) => (d.status || "").toLowerCase() === "available"
+        );
         setAvailableDevices(unallocated);
       } catch (devErr) {
         console.error("Error fetching devices:", devErr);
         setAvailableDevices([]);
       }
 
-      // 2. Fetch Staff Directory
       try {
         let staffRes;
         try {
@@ -192,11 +191,9 @@ function DeviceAllocation() {
       );
     });
 
-    // Return only strict department matches (do not fallback to full staff list)
     return matched;
   }, [staffList, department]);
 
-  // Pre-select matching quantity of available units
   useEffect(() => {
     if (filteredAvailableDevices.length > 0) {
       if (isFromRequisition) {
@@ -209,7 +206,6 @@ function DeviceAllocation() {
     }
   }, [filteredAvailableDevices, isFromRequisition, requestedQty]);
 
-  // Dynamically calculate meaningful remarks based on selected count vs requested count
   useEffect(() => {
     if (isFromRequisition) {
       const allocatedNow = selectedAssetIds.length;
@@ -277,10 +273,8 @@ function DeviceAllocation() {
 
     setSubmitting(true);
     try {
-      // 1. Submit general allocation
       const response = await API.post("/allocations", payload);
 
-      // 2. CRITICAL: Update requisition tracking quantities and status if coming from a requisition
       if (reqData.requestId) {
         await API.patch(`/device-requests/${reqData.requestId}/allocate`, {
           quantity: selectedAssetIds.length,
@@ -318,7 +312,7 @@ function DeviceAllocation() {
         <Toolbar sx={{ justifyContent: "space-between", padding: "12px 28px !important", minHeight: "64px" }}>
           <Box>
             <Typography sx={{ fontSize: "11px", color: "#64748b", fontWeight: 600, letterSpacing: "0.5px" }}>
-              COLLEGE ASSET PORTAL
+              FISAT ASSET PORTAL
             </Typography>
             <Typography sx={{ fontSize: "18px", fontWeight: 700, color: "#1e293b" }}>
                Electronic Device Management System
@@ -328,7 +322,7 @@ function DeviceAllocation() {
           <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
             <Box sx={{ textAlign: "right" }}>
               <Typography sx={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>
-                College System Administrator
+                FISAT System Administrator
               </Typography>
               <Typography sx={{ fontSize: "11px", color: "#64748b" }}>
                 {username.toLowerCase()}@devicehub.edu • Admin

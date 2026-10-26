@@ -255,7 +255,7 @@ function MaintenanceHistory() {
                 letterSpacing: "0.5px",
               }}
             >
-              College Asset Portal
+              FISAT Asset Portal
             </Typography>
 
             <Typography

@@ -2,39 +2,27 @@ const Device = require("../models/Device");
 const DeviceRequest = require("../models/DeviceRequest");
 const Maintenance = require("../models/Maintenance");
 
-// Extracts every identifier variation of the logged-in staff member
+// Extracts clean unique identifiers of the logged-in staff member
 const getStaffIdentifiers = (req) => {
-  const name = (req.user?.name || "").trim();
-  const username = (req.user?.username || "").trim();
+  const name = (req.user?.name || req.user?.username || "").trim();
   const email = (req.user?.email || "").trim().toLowerCase();
   const staffId = (req.user?.staffId || "").trim();
 
-  const terms = [name, username, email, staffId].filter(Boolean);
-
-  // Extract first name (e.g. "Rahul" from "Rahul Sharma")
-  if (name.includes(" ")) {
-    const first = name.split(" ")[0].trim();
-    if (first.length > 1) terms.push(first);
-  }
-
-  return { name, username, email, terms: Array.from(new Set(terms)) };
+  return { name, email, staffId };
 };
 
-// Builds a query matching allocatedTo, incharge, or responsibleStaff
+// Builds a safe query matching allocatedTo, incharge, or responsibleStaff
 const buildStaffDeviceQuery = (req) => {
-  const { terms, email } = getStaffIdentifiers(req);
-
+  const { name, email, staffId } = getStaffIdentifiers(req);
   const orConditions = [];
 
-  terms.forEach((term) => {
-    const regex = new RegExp(term, "i");
+  if (email) orConditions.push({ allocatedEmail: email });
+  if (staffId) orConditions.push({ staffId: staffId });
+  if (name) {
+    const regex = new RegExp(`^${name}$`, "i");
     orConditions.push({ allocatedTo: { $regex: regex } });
     orConditions.push({ incharge: { $regex: regex } });
     orConditions.push({ responsibleStaff: { $regex: regex } });
-  });
-
-  if (email) {
-    orConditions.push({ allocatedEmail: email });
   }
 
   return {
@@ -47,23 +35,27 @@ const buildStaffDeviceQuery = (req) => {
 // @route   GET /api/staff/dashboard-summary
 exports.getStaffDashboardSummary = async (req, res) => {
   try {
-    const { name, terms } = getStaffIdentifiers(req);
+    const { name, email, staffId } = getStaffIdentifiers(req);
     const staffQuery = buildStaffDeviceQuery(req);
 
     // 1. Fetch devices allocated to this staff member
     const assignedDevices = await Device.find(staffQuery).sort({ assetId: 1 });
 
-    // 2. Fetch requisitions submitted by this staff member
-    const myRequests = await DeviceRequest.find({
-      $or: terms.length > 0 ? terms.map((t) => ({ requestedBy: { $regex: new RegExp(t, "i") } })) : [{ requestedBy: name }],
-    }).sort({ createdAt: -1 });
+    // 2. STRICT FILTER: Fetch requests strictly matching the staff's unique email or staffId
+    const requestQuery = email 
+      ? { $or: [{ email: email }, ...(staffId ? [{ staffId: staffId }] : [])] }
+      : { requestedBy: name };
 
-    // 3. Fetch tickets reported by this staff member
-    const myTickets = await Maintenance.find({
-      $or: terms.length > 0 ? terms.map((t) => ({ reportedBy: { $regex: new RegExp(t, "i") } })) : [{ reportedBy: name }],
-    }).sort({ createdAt: -1 });
+    const myRequests = await DeviceRequest.find(requestQuery).sort({ createdAt: -1 });
 
-    const pendingRequestsCount = myRequests.filter((r) => r.status === "Pending").length;
+    // 3. STRICT FILTER: Fetch tickets reported by this staff member
+    const ticketQuery = email
+      ? { $or: [{ email: email }, { reportedBy: new RegExp(`^${name}$`, "i") }] }
+      : { reportedBy: new RegExp(`^${name}$`, "i") };
+
+    const myTickets = await Maintenance.find(ticketQuery).sort({ createdAt: -1 });
+
+    const pendingRequestsCount = myRequests.filter((r) => r.status === "Pending" || r.status === "Partially Allocated").length;
     const approvedRequestsCount = myRequests.filter((r) => r.status === "Approved").length;
 
     res.json({
@@ -96,11 +88,11 @@ exports.getMyDevices = async (req, res) => {
       query.$and = [
         {
           $or: [
-            { assetId: { $regex: search,$options: "i" } },
-            { deviceName: { $regex: search,$options: "i" } },
-            { brand: { $regex: search,$options: "i" } },
-            { model: { $regex: search,$options: "i" } },
-            { serialNumber: { $regex: search,$options: "i" } },
+            { assetId: { $regex: search, $options: "i" } },
+            { deviceName: { $regex: search, $options: "i" } },
+            { brand: { $regex: search, $options: "i" } },
+            { model: { $regex: search, $options: "i" } },
+            { serialNumber: { $regex: search, $options: "i" } },
           ],
         },
       ];
@@ -123,11 +115,13 @@ exports.getMyDevices = async (req, res) => {
 // @route   GET /api/staff/my-requests
 exports.getMyRequests = async (req, res) => {
   try {
-    const { name, terms } = getStaffIdentifiers(req);
+    const { name, email, staffId } = getStaffIdentifiers(req);
 
-    const requests = await DeviceRequest.find({
-      $or: terms.length > 0 ? terms.map((t) => ({ requestedBy: { $regex: new RegExp(t, "i") } })) : [{ requestedBy: name }],
-    }).sort({ createdAt: -1 });
+    const query = email 
+      ? { $or: [{ email: email }, ...(staffId ? [{ staffId: staffId }] : [])] }
+      : { requestedBy: name };
+
+    const requests = await DeviceRequest.find(query).sort({ createdAt: -1 });
 
     res.json(requests);
   } catch (error) {
@@ -141,7 +135,7 @@ exports.getMyRequests = async (req, res) => {
 exports.submitDeviceRequest = async (req, res) => {
   try {
     const { deviceType, quantity, requiredLocation, requiredDate, purpose } = req.body;
-    const { name, username } = getStaffIdentifiers(req);
+    const { name, email, staffId } = getStaffIdentifiers(req);
 
     if (!deviceType || !requiredLocation || !requiredDate) {
       return res.status(400).json({ message: "Please fill in all required fields." });
@@ -157,8 +151,9 @@ exports.submitDeviceRequest = async (req, res) => {
 
     const newRequest = await DeviceRequest.create({
       requestId,
-      requestedBy: name || username || "Staff Member",
-      staffId: req.user?.staffId || "STF-1024",
+      requestedBy: name || "Staff Member",
+      email: email || "",
+      staffId: staffId || req.user?.staffId || "STF-1024",
       department: req.user?.department || "Computer Applications",
       deviceType,
       quantity: Number(quantity) || 1,
@@ -184,7 +179,7 @@ exports.submitDeviceRequest = async (req, res) => {
 exports.reportProblem = async (req, res) => {
   try {
     const { assetId, deviceName, issueDescription, problemCategory, priority, location } = req.body;
-    const { name, username } = getStaffIdentifiers(req);
+    const { name } = getStaffIdentifiers(req);
 
     if (!assetId || !issueDescription) {
       return res.status(400).json({ message: "Asset ID and issue description are required." });
@@ -208,7 +203,7 @@ exports.reportProblem = async (req, res) => {
       issueDescription,
       priority: priority || "High",
       location: location || targetDevice?.location || "Designated Location",
-      reportedBy: name || username || "Staff Member",
+      reportedBy: name || "Staff Member",
       status: "Under Maintenance",
       cost: 0,
     });
@@ -235,14 +230,10 @@ exports.reportProblem = async (req, res) => {
 // @route   GET /api/staff/maintenance-history
 exports.getMaintenanceHistory = async (req, res) => {
   try {
-    const { name, terms } = getStaffIdentifiers(req);
-
-    const ticketConditions = terms.map((t) => ({
-      reportedBy: { $regex: new RegExp(t, "i") },
-    }));
+    const { name } = getStaffIdentifiers(req);
 
     const history = await Maintenance.find({
-      $or: ticketConditions.length > 0 ? ticketConditions : [{ reportedBy: name }],
+      reportedBy: new RegExp(`^${name}$`, "i"),
     }).sort({ createdAt: -1 });
 
     res.json(history);

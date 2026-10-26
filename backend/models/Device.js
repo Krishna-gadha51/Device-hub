@@ -35,7 +35,7 @@ const deviceSchema = new mongoose.Schema(
     warrantyExpiry: { type: String, default: null },
     condition: {
       type: String,
-      enum: ["New", "Good", "Fair", "Damaged", "Needs Repair"],
+      enum: ["New", "Good", "Fair", "Damaged", "Needs Repair", "Scrapped / Unrepairable", "Beyond Repair"],
       default: "New",
     },
     status: {

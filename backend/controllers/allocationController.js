@@ -1,7 +1,7 @@
 const Allocation = require("../models/Allocation");
 const Device = require("../models/Device");
 const Activity = require("../models/Activity");
-const DeviceRequest = require("../models/DeviceRequest"); // <--- Ensure model is imported
+const DeviceRequest = require("../models/DeviceRequest");
 
 const getNextAllocationId = async () => {
   const lastAlloc = await Allocation.findOne().sort({ createdAt: -1 });
@@ -47,9 +47,17 @@ exports.createAllocation = async (req, res) => {
       return res.status(404).json({ message: "Selected devices were not found in the inventory." });
     }
 
+    // 🛡️ CRITICAL CHECK: Prevent double-allocation by ensuring all devices are strictly "Available"
+    const alreadyAllocatedDevice = devices.find((d) => (d.status || "").toLowerCase() !== "available");
+    if (alreadyAllocatedDevice) {
+      return res.status(400).json({
+        message: `Error: Device ${alreadyAllocatedDevice.assetId} is already allocated and cannot be assigned to multiple staff members simultaneously.`,
+      });
+    }
+
     const allocationId = await getNextAllocationId();
 
-    // Update each device's status and tracking history
+    // Update each device's status and tracking history safely
     await Promise.all(
       devices.map((device) => {
         device.status = "Allocated";

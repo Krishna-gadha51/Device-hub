@@ -7,6 +7,10 @@ const eWasteSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
+    ewasteId: {
+      type: String,
+      default: function() { return this.scrapId; }
+    },
     assetId: {
       type: String,
       required: true,
@@ -42,7 +46,7 @@ const eWasteSchema = new mongoose.Schema(
     },
     disposalStatus: {
       type: String,
-      enum: ["Pending Disposal", "Sent to Recycler", "Dismantled for Parts"],
+      enum: ["Pending Disposal", "Sent to Recycler", "Dismantled for Parts", "Sent for Recycling", "Disposed / Scrapped"],
       default: "Pending Disposal",
     },
     disposalVendor: {
@@ -57,4 +61,4 @@ const eWasteSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.models.EWaste || mongoose.model("EWaste", eWasteSchema);
+module.exports = mongoose.models.EWaste || mongoose.model("EWaste", eWasteSchema, "ewastes");

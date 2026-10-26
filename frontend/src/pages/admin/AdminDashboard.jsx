@@ -78,6 +78,16 @@ function AdminDashboard() {
         console.warn("Device requests endpoint not reachable.");
       }
 
+      // Fetch accurate real-time e-waste count from the ewaste endpoint to guarantee synchronization
+      let ewasteRealCount = 0;
+      try {
+        const ewasteRes = await API.get("/ewaste");
+        const ewasteList = Array.isArray(ewasteRes.data) ? ewasteRes.data : [];
+        ewasteRealCount = ewasteList.length;
+      } catch (err) {
+        console.warn("E-waste endpoint lookup failed for dashboard count.");
+      }
+
       const fetchedStats = dashboardRes.data?.stats || {};
 
       setStats({
@@ -85,7 +95,7 @@ function AdminDashboard() {
         available: fetchedStats.available ?? 0,
         allocated: fetchedStats.allocated ?? 0,
         maintenance: fetchedStats.maintenance ?? 0,
-        ewaste: fetchedStats.ewaste ?? 0,
+        ewaste: ewasteRealCount > 0 ? ewasteRealCount : (fetchedStats.ewaste ?? 0),
         deviceRequests: unreadCount,
       });
 
@@ -208,6 +218,7 @@ function AdminDashboard() {
       icon: <DeleteOutlineOutlinedIcon />,
       color: "#dc2626",
       bg: "#fef2f2",
+      path: "/admin/ewaste",
     },
   ];
 
@@ -260,7 +271,7 @@ function AdminDashboard() {
         <Toolbar sx={{ justifyContent: "space-between", padding: "12px 28px !important", minHeight: "64px" }}>
           <Box>
             <Typography sx={{ fontSize: "11px", color: "#64748b", fontWeight: 600, letterSpacing: "0.5px" }}>
-              COLLEGE ASSET PORTAL
+              FISAT ASSET PORTAL
             </Typography>
             <Typography sx={{ fontSize: "18px", fontWeight: 700, color: "#0f172a" }}>
               Electronic Device Management System
@@ -270,7 +281,7 @@ function AdminDashboard() {
           <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
             <Box sx={{ textAlign: "right" }}>
               <Typography sx={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>
-                College System Administrator
+                FISAT System Administrator
               </Typography>
               <Typography sx={{ fontSize: "11px", color: "#64748b" }}>
                 {username.toLowerCase()}@devicehub.edu • Admin
@@ -417,59 +428,92 @@ function AdminDashboard() {
             boxSizing: "border-box",
           }}
         >
-          {statCards.map((card, idx) => (
-            <Paper
-              key={idx}
-              elevation={0}
-              sx={{
-                padding: "18px 20px",
-                borderRadius: "14px",
-                backgroundColor: "#ffffff",
-                border: "1px solid #e2e8f0",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-                height: "100%",
-                boxSizing: "border-box",
-                cursor: card.label === "DEVICE REQUESTS" ? "pointer" : "default",
-                transition: "all 0.2s ease-in-out",
-                "&:hover": card.label === "DEVICE REQUESTS" ? { borderColor: "#7c3aed", transform: "translateY(-2px)" } : {},
-              }}
-              onClick={() => {
-                if (card.label === "DEVICE REQUESTS") {
-                  handleViewRequests();
-                }
-              }}
-            >
-              <Typography sx={{ fontSize: "11px", fontWeight: 700, color: "#64748b", letterSpacing: "0.5px" }}>
-                {card.label}
-              </Typography>
-
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginY: 1.5 }}>
-                <Typography sx={{ fontSize: "28px", fontWeight: 800, color: card.label === "DEVICE REQUESTS" && stats.deviceRequests > 0 ? "#7c3aed" : "#0f172a" }}>
-                  {loading ? <CircularProgress size={22} /> : card.val}
+          {statCards.map((card, idx) => {
+            const isClickable = card.label === "DEVICE REQUESTS" || card.label === "E-WASTE";
+            return (
+              <Paper
+                key={idx}
+                elevation={0}
+                sx={{
+                  padding: "18px 20px",
+                  borderRadius: "14px",
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  height: "100%",
+                  boxSizing: "border-box",
+                  cursor: isClickable ? "pointer" : "default",
+                  transition: "all 0.2s ease-in-out",
+                  "&:hover": isClickable
+                    ? { borderColor: card.label === "E-WASTE" ? "#dc2626" : "#7c3aed", transform: "translateY(-2px)" }
+                    : {},
+                }}
+                onClick={() => {
+                  if (card.label === "DEVICE REQUESTS") {
+                    handleViewRequests();
+                  } else if (card.label === "E-WASTE") {
+                    navigate("/admin/ewaste");
+                  }
+                }}
+              >
+                <Typography sx={{ fontSize: "11px", fontWeight: 700, color: "#64748b", letterSpacing: "0.5px" }}>
+                  {card.label}
                 </Typography>
-                <Box
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginY: 1.5 }}>
+                  <Typography
+                    sx={{
+                      fontSize: "28px",
+                      fontWeight: 800,
+                      color:
+                        card.label === "DEVICE REQUESTS" && stats.deviceRequests > 0
+                          ? "#7c3aed"
+                          : card.label === "E-WASTE" && stats.ewaste > 0
+                          ? "#dc2626"
+                          : "#0f172a",
+                    }}
+                  >
+                    {loading ? <CircularProgress size={22} /> : card.val}
+                  </Typography>
+                  <Box
+                    sx={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: "10px",
+                      backgroundColor: card.bg,
+                      color: card.color,
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                    }}
+                  >
+                    {card.icon}
+                  </Box>
+                </Box>
+
+                <Typography
                   sx={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: "10px",
-                    backgroundColor: card.bg,
-                    color: card.color,
-                    display: "flex",
-                    justifyContent: "center",
-                    alignItems: "center",
+                    fontSize: "11.5px",
+                    color:
+                      card.label === "DEVICE REQUESTS" && stats.deviceRequests > 0
+                        ? "#7c3aed"
+                        : card.label === "E-WASTE" && stats.ewaste > 0
+                        ? "#dc2626"
+                        : "#64748b",
+                    fontWeight:
+                      (card.label === "DEVICE REQUESTS" && stats.deviceRequests > 0) ||
+                      (card.label === "E-WASTE" && stats.ewaste > 0)
+                        ? 600
+                        : 400,
                   }}
                 >
-                  {card.icon}
-                </Box>
-              </Box>
-
-              <Typography sx={{ fontSize: "11.5px", color: card.label === "DEVICE REQUESTS" && stats.deviceRequests > 0 ? "#7c3aed" : "#64748b", fontWeight: card.label === "DEVICE REQUESTS" && stats.deviceRequests > 0 ? 600 : 400 }}>
-                {card.sub}
-              </Typography>
-            </Paper>
-          ))}
+                  {card.sub}
+                </Typography>
+              </Paper>
+            );
+          })}
         </Box>
 
         {/* BOTTOM TABLES */}
